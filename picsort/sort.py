@@ -204,7 +204,8 @@ def handle_file(new_root, digest, filenames):
         alter_sidecar(sidecar, sidecar_dest, image_dest)
 
 
-def handle_files(new_root, directory, num_threads):
+def handle_files(new_root, file_lists, num_threads):
+    directory = build_hashes(file_lists, num_threads)
     if num_threads == 0:
         for digest in directory.keys():
             handle_file(new_root, digest, directory[digest]) 
@@ -281,7 +282,7 @@ def main():
     if opts.only_verify:
         failures = verify_files(file_lists, threads)
     else:
-        failures = handle_files(outputdir, build_hashes(file_lists, threads), threads)
+        failures = handle_files(outputdir, file_lists, threads)
     with open('failed_files.json', 'w+') as f:
         json.dump(failures, f, indent=2)
     print 'Done!'

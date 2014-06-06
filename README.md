@@ -1,6 +1,18 @@
 picsort
 =======
 
+# installation
+
+If you've cloned this repository run:
+
+    python setup.py install
+
+If you'd like to use PyPi:
+
+    pip install picsort
+
+# background
+
 This is a script that I wrote because I had thousands of raw images on my computer
 that needed to be sorted and imported into Lightroom.  Instead of manually checking
 for duplicates, I decided to make a computer do the work for me.
@@ -25,3 +37,13 @@ uniquely identify a file with 40 characters.
 I try to find all sidecar files for each copy of the raw image.  If I only find one,
 it's added to the output directory.  If more than one sidecar is found, I take the
 one with the most recent modified time and suffix the remainders with sidecarN.
+
+If you want to verify your store of photos, you can use the verify mode by doing this:
+
+    python sort.py --verify output_directory
+
+This will tell you which files failed to be verified.
+
+Both sorting and verifying files will create file in the directory where the script
+was started called <code>failed_files.json</code>.  The format of this file will be
+appropriate for the operation being conducted.
