@@ -4,7 +4,7 @@ import hashlib
 import json
 import shutil
 from xml.dom import minidom
-import multiprocessing
+import multiprocessing # Only for CPU Count
 import Queue
 import threading
 import time
@@ -135,7 +135,6 @@ def make_dirs_p(name):
     with mkdir_lock:
         if not os.path.exists(name):
             os.makedirs(name)
-    
 
 
 def copy_file(source, dest):
@@ -217,9 +216,7 @@ def handle_files(new_root, directory, num_threads):
         q.put(DONE)
         for thread in threads:
             thread.join(0.001)
-
     failing_files = []
-    print 'Failing files:'
     while not bad_files.empty():
         bad_file = bad_files.get()
         failing_files.append(bad_file)
@@ -232,7 +229,8 @@ def main():
     parser = optparse.OptionParser('%prog <dir1> <dirN>');
     parser.add_option('-o', '--output', help='Root directory for output',
                       action='store', dest='output', default=None)
-    parser.add_option('-t', '--threads', help='Number of work threads to use.  0 means ignore threading',
+    parser.add_option('-t', '--threads', help='Number of work threads to use.  ' +
+                      '0 means ignore threading',
                       action='store', dest='threads', default=multiprocessing.cpu_count())
     opts, args = parser.parse_args();
 
