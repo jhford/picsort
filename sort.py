@@ -104,7 +104,7 @@ def dirs_from_image_data(source):
     # http://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/EXIF.html
     try:
         with open(source) as f:
-            exifdata = exifread.process_file(f)
+            exifdata = exifread.process_file(f, details=False)
     except:
         return os.path.join('bad exif')
     dirs = []
