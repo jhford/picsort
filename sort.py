@@ -4,6 +4,10 @@ import hashlib
 import json
 import shutil
 from xml.dom import minidom
+import multiprocessing
+import Queue
+import threading
+import time
 
 try:
     import exifread
@@ -15,6 +19,8 @@ except ImportError:
 
 digest_type = 'sha1'
 picture_extensions = ['.jpg', '.jpeg', '.psd', '.nef', '.cr2', '.png']
+
+stdout_lock = threading.Lock()
 
 
 def split_filename(filename):
@@ -87,15 +93,22 @@ def find_sidecars(img_files):
 
 
 def copy_file(source, dest):
+    stdout_lock.acquire()
+    print 'Copying %s ==> %s' % (source, dest)
+    stdout_lock.release()
     dirname = os.path.dirname(dest)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     shutil.copy2(source, dest)
-    print 'Copying %s ==> %s' % (source, dest)
 
 
 def alter_sidecars(source, dest, image_dest):
-    print 'New sidecar for %s %s ==> %s' % (image_dest, source, dest)
+    stdout_lock.acquire()
+    print 'New sidecar for %s ==> %s' % (source, dest)
+    stdout_lock.release()
+    dirname = os.path.dirname(dest)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
     dom = minidom.parse(source)
     dom.getElementsByTagName('rdf:Description')[0].attributes.get('crs:RawFileName').value = image_dest
     with open(dest, 'w+') as f:
@@ -131,9 +144,34 @@ def build_actions(new_root, directory):
     return actions
 
 
-def process_files(actions):
+def process_files(actions, num_threads):
+    threads = []
+    q = Queue.Queue()
+    DONE='DONE'
+
+    def worker():
+        while True:
+            item = q.get()
+            if item is DONE:
+                q.task_done()
+                break
+            item[0](*item[1:])
+            q.task_done()
+
+    for i in range(num_threads):
+        t = threading.Thread(target=worker)
+        threads.append(t)
+        t.daemon = True
+        t.start()
+
     for action in actions:
-        action[0](*action[1:])
+        q.put(action)
+
+    q.join()
+    while len([x for x in threads if x.isAlive()]) != 0:
+        q.put(DONE)
+        for thread in threads:
+            thread.join(0.001)
 
 
 def main():
@@ -141,7 +179,14 @@ def main():
     parser = optparse.OptionParser('%prog <dir1> <dirN>');
     parser.add_option('-o', '--output', help='Root directory for output',
                       action='store', dest='output', default=None)
+    parser.add_option('-t', '--threads', help='Number of work threads to use',
+                      action='store', dest='threads', default=multiprocessing.cpu_count())
     opts, args = parser.parse_args();
+
+    try:
+        threads = int(opts.threads)
+    except ValueError:
+        parser.error("Thread count must be an integer")
     
     if not opts.output:
         parser.error("You must specify an output directory")
@@ -156,7 +201,7 @@ def main():
     for arg in args:
         file_lists.append(find_pictures(arg))
     data = build_actions(outputdir, build_hashes(file_lists))
-    process_files(data)
+    process_files(data, threads)
     print 'Done!'
 
 
