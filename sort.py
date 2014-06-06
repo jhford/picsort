@@ -170,6 +170,9 @@ def build_actions(new_root, directory):
         actions.append(action)
 
         sidecars = find_sidecars(directory[digest])
+        if len(sidecars) == 0:
+            continue
+
         default_sidecar_dest = os.path.join(output_directory, base_dest + '.xmp')
         newest_sidecar = max(sidecars, key=os.path.getctime)
         actions.append((alter_sidecars, newest_sidecar, default_sidecar_dest, image_dest))
