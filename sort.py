@@ -145,7 +145,7 @@ def copy_file(source, dest):
     shutil.copy2(source, dest)
 
 
-def alter_sidecars(source, dest, image_dest):
+def alter_sidecar(source, dest, image_dest):
     with stdout_lock:
         print 'New sidecar for %s ==> %s' % (source, dest)
     make_dirs_p(os.path.dirname(dest))
@@ -155,46 +155,42 @@ def alter_sidecars(source, dest, image_dest):
         f.write(dom.toxml())
 
 
-def build_actions(new_root, directory):
-    actions = []
-    for digest in directory.keys():
-        source = directory[digest][0]
-        dirname, filename, ext = split_filename(source)
+def handle_file(new_root, digest, filenames):
+    source = filenames[0]
+    dirname, filename, ext = split_filename(source)
 
-        data_based_directories = dirs_from_image_data(source)
-        output_directory = os.path.join(new_root, data_based_directories)
-        base_dest = '%s_%s_%s' % (filename, digest_type, digest)
-        image_dest = base_dest + ext
+    data_based_directories = dirs_from_image_data(source)
+    output_directory = os.path.join(new_root, data_based_directories)
+    base_dest = '%s_%s_%s' % (filename, digest_type, digest)
+    image_dest = base_dest + ext
 
-        action = (copy_file, source, os.path.join(output_directory, image_dest))
-        actions.append(action)
+    copy_file(source, os.path.join(output_directory, image_dest))
 
-        sidecars = find_sidecars(directory[digest])
-        if len(sidecars) == 0:
-            continue
-
-        default_sidecar_dest = os.path.join(output_directory, base_dest + '.xmp')
-        newest_sidecar = max(sidecars, key=os.path.getctime)
-        actions.append((alter_sidecars, newest_sidecar, default_sidecar_dest, image_dest))
-        i = 1
-        for sidecar in sidecars:
-            if sidecar is newest_sidecar:
-                continue
-            sidecar_dest = os.path.join(output_directory, '%s_sidecar%d.xmp' %(base_dest, i))
-            i += 1
-            actions.append((alter_sidecars, sidecar, sidecar_dest, image_dest))
-            
-    return actions
-
-
-def process_files(actions, num_threads):
-    if num_threads == 0:
-        for action in actions:
-            action[0](*action[1:])
+    sidecars = find_sidecars(filenames)
+    if len(sidecars) == 0:
         return
+
+    default_sidecar_dest = os.path.join(output_directory, base_dest + '.xmp')
+    newest_sidecar = max(sidecars, key=os.path.getctime)
+    alter_sidecar(newest_sidecar, default_sidecar_dest, image_dest)
+    i = 1
+    for sidecar in sidecars:
+        if sidecar is newest_sidecar:
+            continue
+        sidecar_dest = os.path.join(output_directory, '%s_sidecar%d.xmp' %(base_dest, i))
+        i += 1
+        alter_sidecar(sidecar, sidecar_dest, image_dest)
+
+
+def handle_files(new_root, directory, num_threads):
+    if num_threads == 0:
+        for digest in directory.keys():
+            handle_file(new_root, digest, directory[digest]) 
+        return
+
     threads = []
     q = Queue.Queue()
-    DONE='DONE'
+    DONE = 'DONE'
 
     def worker():
         while True:
@@ -202,7 +198,7 @@ def process_files(actions, num_threads):
             if item is DONE:
                 q.task_done()
                 break
-            item[0](*item[1:])
+            handle_file(new_root, item, directory[item])
             q.task_done()
 
     for i in range(num_threads):
@@ -210,16 +206,14 @@ def process_files(actions, num_threads):
         threads.append(t)
         t.daemon = True
         t.start()
-
-    for action in actions:
-        q.put(action)
-
+    for digest in directory.keys():
+        q.put(digest)
     q.join()
     while len([x for x in threads if x.isAlive()]) != 0:
         q.put(DONE)
         for thread in threads:
             thread.join(0.001)
-
+  
 
 def main():
     print 'Find and sort pictures'
@@ -247,8 +241,7 @@ def main():
     file_lists = []
     for arg in args:
         file_lists.append(find_pictures(arg))
-    data = build_actions(outputdir, build_hashes(file_lists, threads))
-    process_files(data, threads)
+    handle_files(outputdir, build_hashes(file_lists, threads), threads)
     print 'Done!'
 
 
