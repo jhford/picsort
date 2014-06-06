@@ -188,6 +188,10 @@ def build_actions(new_root, directory):
 
 
 def process_files(actions, num_threads):
+    if num_threads == 0:
+        for action in actions:
+            action[0](*action[1:])
+        return
     threads = []
     q = Queue.Queue()
     DONE='DONE'
@@ -222,7 +226,7 @@ def main():
     parser = optparse.OptionParser('%prog <dir1> <dirN>');
     parser.add_option('-o', '--output', help='Root directory for output',
                       action='store', dest='output', default=None)
-    parser.add_option('-t', '--threads', help='Number of work threads to use',
+    parser.add_option('-t', '--threads', help='Number of work threads to use.  0 means ignore threading',
                       action='store', dest='threads', default=multiprocessing.cpu_count())
     opts, args = parser.parse_args();
 
