@@ -52,3 +52,18 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# Virtualenv
+include/
+
+# Mac OS X
+.DS_Store
+
+# Vim
+.*.sw?
+
+# Images
+*.NEF
+*.nef
+*.jpg
+*.png
+*.xmp

@@ -8,6 +8,7 @@ import multiprocessing # Only for CPU Count
 import Queue
 import threading
 import time
+import re
 
 try:
     import exifread
@@ -98,6 +99,28 @@ def build_hashes(file_lists, num_threads, bufsize=1024*1024):
                 thread.join(0.001)
 
     return directory
+
+
+def verify_files(file_lists, num_threads):
+    hash_len = len(hashlib.new(digest_type).hexdigest())
+    pattern = re.compile('.*_%s_(?P<digest>[a-fA-F0-9]{%d}).*' % (digest_type, hash_len))
+    directory = build_hashes(file_lists, num_threads)
+    failed_files = []
+
+    for digest in directory.keys():
+        filename = directory[digest][0]
+        match = pattern.match(filename)
+        if match:
+            found_digest = match.group('digest')
+            if found_digest == digest:
+                print 'verified %s' % filename
+            else:
+                failed_files.append(filename)
+                print '%s failed to verify: %s vs %s' % (filename, digest, found_digest)
+        else:
+            print '%s does not have a hash, skipping' % filename
+
+    return failed_files
 
 
 def dirs_from_image_data(source):
@@ -232,6 +255,8 @@ def main():
     parser.add_option('-t', '--threads', help='Number of work threads to use.  ' +
                       '0 means ignore threading',
                       action='store', dest='threads', default=multiprocessing.cpu_count())
+    parser.add_option('--verify', help='Verify files instead of sorting them',
+                       action='store_true', default=False, dest='only_verify')
     opts, args = parser.parse_args();
 
     try:
@@ -239,8 +264,10 @@ def main():
     except ValueError:
         parser.error("Thread count must be an integer")
     
-    if not opts.output:
+    if not opts.output and not opts.only_verify:
         parser.error("You must specify an output directory")
+    elif opts.only_verify:
+        outputdir = None
     else:
         outputdir = os.path.abspath(opts.output)
         print "Output directory: %s" % outputdir
@@ -251,7 +278,10 @@ def main():
     file_lists = []
     for arg in args:
         file_lists.append(find_pictures(arg))
-    failures = handle_files(outputdir, build_hashes(file_lists, threads), threads)
+    if opts.only_verify:
+        failures = verify_files(file_lists, threads)
+    else:
+        failures = handle_files(outputdir, build_hashes(file_lists, threads), threads)
     with open('failed_files.json', 'w+') as f:
         json.dump(failures, f, indent=2)
     print 'Done!'
