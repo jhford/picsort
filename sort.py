@@ -218,11 +218,13 @@ def handle_files(new_root, directory, num_threads):
         for thread in threads:
             thread.join(0.001)
 
+    failing_files = []
     print 'Failing files:'
     while not bad_files.empty():
         bad_file = bad_files.get()
-        print '  * %s: %s' % (bad_file['hash'], bad_file['files'])
+        failing_files.append(bad_file)
         bad_files.task_done()
+    return failing_files
   
 
 def main():
@@ -251,7 +253,9 @@ def main():
     file_lists = []
     for arg in args:
         file_lists.append(find_pictures(arg))
-    handle_files(outputdir, build_hashes(file_lists, threads), threads)
+    failures = handle_files(outputdir, build_hashes(file_lists, threads), threads)
+    with open('failed_files.json', 'w+') as f:
+        json.dump(failures, f, indent=2)
     print 'Done!'
 
 
