@@ -13,7 +13,7 @@ try:
     import exifread
 except ImportError:
     print 'You are missing the exifread module.  Try installing it'
-    print 'with "sudo pip install readexif" or "sudo easy_install readexif"'
+    print 'with "sudo pip install exifread" or "sudo easy_install exifread"'
     exit(1)
 
 
@@ -43,18 +43,13 @@ def find_pictures(root):
 
 def build_hashes(file_lists, num_threads, bufsize=1024*1024):
     directory = {}
-    directory_lock = threading.Lock()
-    threads = []
-    DONE = 'DONE'
-    q = Queue.Queue()
 
     def update_directory(digest, new_file):
-        directory_lock.acquire()
-        if directory.has_key(digest):
-            directory[digest].append(new_file)
-        else:
-            directory[digest] = [new_file]
-        directory_lock.release()
+        with directory_lock:
+            if directory.has_key(digest):
+                directory[digest].append(new_file)
+            else:
+                directory[digest] = [new_file]
 
     def hash_file(filename):
         with open(filename) as f:
@@ -82,6 +77,10 @@ def build_hashes(file_lists, num_threads, bufsize=1024*1024):
                 digest = hash_file(f)
                 update_directory(digest, f)
     else:
+        directory_lock = threading.Lock()
+        threads = []
+        DONE = 'DONE'
+        q = Queue.Queue()
         for i in range(num_threads):
             t = threading.Thread(target=worker)
             threads.append(t)
@@ -133,9 +132,8 @@ def find_sidecars(img_files):
 
 
 def copy_file(source, dest):
-    stdout_lock.acquire()
-    print 'Copying %s ==> %s' % (source, dest)
-    stdout_lock.release()
+    with stdout_lock:
+        print 'Copying %s ==> %s' % (source, dest)
     dirname = os.path.dirname(dest)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -143,9 +141,8 @@ def copy_file(source, dest):
 
 
 def alter_sidecars(source, dest, image_dest):
-    stdout_lock.acquire()
-    print 'New sidecar for %s ==> %s' % (source, dest)
-    stdout_lock.release()
+    with stdout_lock:
+        print 'New sidecar for %s ==> %s' % (source, dest)
     dirname = os.path.dirname(dest)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
