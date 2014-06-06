@@ -45,11 +45,10 @@ def build_hashes(file_lists, num_threads, bufsize=1024*1024):
     directory = {}
 
     def update_directory(digest, new_file):
-        with directory_lock:
-            if directory.has_key(digest):
-                directory[digest].append(new_file)
-            else:
-                directory[digest] = [new_file]
+        if directory.has_key(digest):
+            directory[digest].append(new_file)
+        else:
+            directory[digest] = [new_file]
 
     def hash_file(filename):
         with open(filename) as f:
@@ -68,7 +67,8 @@ def build_hashes(file_lists, num_threads, bufsize=1024*1024):
                 q.task_done()
                 break
             digest = hash_file(item)
-            update_directory(digest, item)
+            with directory_lock:
+                update_directory(digest, item)
             q.task_done()
 
     if num_threads == 0:
@@ -130,22 +130,25 @@ def find_sidecars(img_files):
             sidecars.append(sidecar)
     return sidecars
 
+mkdir_lock = threading.Lock()
+def make_dirs_p(name):
+    with mkdir_lock:
+        if not os.path.exists(name):
+            os.makedirs(name)
+    
+
 
 def copy_file(source, dest):
     with stdout_lock:
         print 'Copying %s ==> %s' % (source, dest)
-    dirname = os.path.dirname(dest)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
+    make_dirs_p(os.path.dirname(dest))
     shutil.copy2(source, dest)
 
 
 def alter_sidecars(source, dest, image_dest):
     with stdout_lock:
         print 'New sidecar for %s ==> %s' % (source, dest)
-    dirname = os.path.dirname(dest)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
+    make_dirs_p(os.path.dirname(dest))
     dom = minidom.parse(source)
     dom.getElementsByTagName('rdf:Description')[0].attributes.get('crs:RawFileName').value = image_dest
     with open(dest, 'w+') as f:
