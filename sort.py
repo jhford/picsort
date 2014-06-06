@@ -190,6 +190,7 @@ def handle_files(new_root, directory, num_threads):
 
     threads = []
     q = Queue.Queue()
+    bad_files = Queue.Queue()
     DONE = 'DONE'
 
     def worker():
@@ -198,7 +199,10 @@ def handle_files(new_root, directory, num_threads):
             if item is DONE:
                 q.task_done()
                 break
-            handle_file(new_root, item, directory[item])
+            try:
+                handle_file(new_root, item, directory[item])
+            except:
+                bad_files.put({'hash': item, 'files': directory[item]})
             q.task_done()
 
     for i in range(num_threads):
@@ -213,6 +217,12 @@ def handle_files(new_root, directory, num_threads):
         q.put(DONE)
         for thread in threads:
             thread.join(0.001)
+
+    print 'Failing files:'
+    while not bad_files.empty():
+        bad_file = bad_files.get()
+        print '  * %s: %s' % (bad_file['hash'], bad_file['files'])
+        bad_files.task_done()
   
 
 def main():
