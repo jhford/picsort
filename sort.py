@@ -41,23 +41,63 @@ def find_pictures(root):
     return img_files
 
 
-def build_hashes(file_lists, bufsize=1024*1024):
+def build_hashes(file_lists, num_threads, bufsize=1024*1024):
     directory = {}
-    for l in file_lists:
-        for f in l:
+    directory_lock = threading.Lock()
+    threads = []
+    DONE = 'DONE'
+    q = Queue.Queue()
+
+    def update_directory(digest, new_file):
+        directory_lock.acquire()
+        if directory.has_key(digest):
+            directory[digest].append(new_file)
+        else:
+            directory[digest] = [new_file]
+        directory_lock.release()
+
+    def hash_file(filename):
+        with open(filename) as f:
             h = hashlib.new(digest_type)
-            with open(f) as _f:
-                while True:
-                    d = _f.read(bufsize)
-                    if not d:
-                        break
-                    h.update(d)
-                h.update(_f.read())
-                digest = h.hexdigest()
-                if directory.has_key(digest):
-                    directory[digest].append(f)
-                else:
-                    directory[digest] = [f]
+            while True:
+                d = f.read(bufsize)
+                if not d:
+                    break
+                h.update(d)
+        return h.hexdigest()
+
+    def worker():
+        while True:
+            item = q.get()
+            if item is DONE:
+                q.task_done()
+                break
+            digest = hash_file(item)
+            update_directory(digest, item)
+            q.task_done()
+
+    if num_threads == 0:
+        for l in file_lists:
+            for f in l:
+                digest = hash_file(f)
+                update_directory(digest, f)
+    else:
+        for i in range(num_threads):
+            t = threading.Thread(target=worker)
+            threads.append(t)
+            t.daemon = True
+            t.start()
+
+        for l in file_lists:
+            for f in l:
+                q.put(f)
+
+        q.join()
+        while len([x for x in threads if x.isAlive()]) != 0:
+            q.put(DONE)
+            for thread in threads:
+                thread.join(0.001)
+
     return directory
 
 
@@ -200,7 +240,7 @@ def main():
     file_lists = []
     for arg in args:
         file_lists.append(find_pictures(arg))
-    data = build_actions(outputdir, build_hashes(file_lists))
+    data = build_actions(outputdir, build_hashes(file_lists, threads))
     process_files(data, threads)
     print 'Done!'
 
